@@ -1,7 +1,8 @@
-ESXI_HOST = ENV["ESXI_HOST"]
-ESXI_USER = ENV["ESXI_USER"] || "root"
-OLINCHAT_ENV = ENV["OLINCHAT_ENV"] || "development"
-VM_NAME = ENV["VM_NAME"] || "Olin-Rocket-Chat"
+config = YAML::load_file(File.join(__dir__, 'config.yml'))
+ESXI_HOST = ENV["ESXI_HOST"] || config["ESXI_HOST"]
+ESXI_USER = ENV["ESXI_USER"] || config["ESXI_USER"] || "root"
+OLINCHAT_ENV = ENV["OLINCHAT_ENV"] || config["OLINCHAT_ENV"] || "development"
+VM_NAME = ENV["VM_NAME"] || config["VM_NAME"] || "Olin-Rocket-Chat"
 
 VAGRANTFILE_API_VERSION = "2"
 
@@ -42,16 +43,15 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 		end
 	end
 
-	# VMWare ESXi
-	config.vm.provider :vmware_esxi do |esxi, override|
-		esxi.esxi_hostname = ESXI_HOST
-	    esxi.esxi_username = ESXI_USER
-	    esxi.esxi_password = 'prompt:'
-	    esxi.guest_name = VM_NAME
-        esxi.guest_memsize = '4096'
-        esxi.guest_numvcpus = '8'
-
-        # Using nfs because rsync doesn't work with rocket.chat's folder structure
-		override.vm.synced_folder('..', '/vagrant', type: 'nfs')
+	# VMWare ESXi - producion only
+	unless development
+		config.vm.provider :vmware_esxi do |esxi, override|
+			esxi.esxi_hostname = ESXI_HOST
+		    esxi.esxi_username = ESXI_USER
+		    esxi.esxi_password = 'prompt:'
+		    esxi.guest_name = VM_NAME
+	        esxi.guest_memsize = '4096'
+	        esxi.guest_numvcpus = '8'
+		end
 	end
 end

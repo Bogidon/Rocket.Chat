@@ -9,10 +9,7 @@ set -euvo pipefail
 
 # Install Node 8.x LTS, and other dependencies
 curl -sL https://deb.nodesource.com/setup_8.x | sudo -E bash -
-apt-get install -y build-essential nodejs mongodb unzip
-
-ln -f -s /usr/bin/nodejs /usr/bin/node
-ln -f -s /usr/bin/nodejs /usr/sbin/node
+apt-get install -y build-essential nodejs mongodb unzip git
 
 # Install Meteor
 curl https://install.meteor.com/ | sh
@@ -26,16 +23,19 @@ then
 	pm2 startup
 
 	mkdir -p /var/log/rocket.chat
+	
+	# Deploy
+	MONGO_URL=mongodb://localhost:27017/rocketchat
+	MONGO_OPLOG_URL=mongodb://localhost:27017/local
+	ROOT_URL=http://localhost:3000
+	PORT=3000
+
+	# Download source
+	git clone -b olin-master https://github.com/Bogidon/Rocket.Chat --depth=1
 fi
 
 
 
-# DEPLOY
-# HOST=http://your_hostname.com
-# MONGO_URL=mongodb://localhost:27017/rocketchat
-# MONGO_OPLOG_URL=mongodb://localhost:27017/local
-# ROOT_URL=http://localhost:3000
-# PORT=3000
 
 # cd /vagrant
 # meteor build --server "$HOST" --directory .
