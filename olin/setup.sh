@@ -9,7 +9,9 @@ set -euvo pipefail
 
 # Install Node 8.x LTS, and other dependencies
 curl -sL https://deb.nodesource.com/setup_8.x | sudo -E bash -
-apt-get install -y build-essential nodejs mongodb unzip git
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv EA312927
+echo "deb http://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.2 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-3.2.list
+apt-get install -y build-essential nodejs mongodb-org unzip git
 
 # Install Meteor
 curl https://install.meteor.com/ | sh
@@ -17,49 +19,70 @@ curl https://install.meteor.com/ | sh
 # PRODUCTION
 if [ "$OLINCHAT_ENV" == "PRODUCTION" ]
 then
-	
-	# pm2 allows auto starting server
-	npm install pm2 -g
-	pm2 startup
+    # VPN
+    if [[ $OVPN_FILE ]]
+    then
+        apt-get install openvpn
+        openvpn --config "$OVPN_FILE"
+    fi
 
-	mkdir -p /var/log/rocket.chat
-	
-	# Deploy
-	MONGO_URL=mongodb://localhost:27017/rocketchat
-	MONGO_OPLOG_URL=mongodb://localhost:27017/local
-	ROOT_URL=http://localhost:3000
-	PORT=3000
+    # pm2 allows auto starting server
+    npm install pm2 -g
+    pm2 startup
 
-	# Download source
-	git clone -b olin-master https://github.com/Bogidon/Rocket.Chat --depth=1
+    mkdir -p /var/log/rocket.chat
+    chmod 755 /var/log/rocket.chat
+
+    # Deploy
+    MONGO_URL=mongodb://localhost:27017/rocketchat
+    MONGO_OPLOG_URL=mongodb://localhost:27017/local?replicaSet=001-rs
+    ROOT_URL=http://localhost:3000
+    PORT=3000
+
+    # Download source
+    mkdir /opt/rocketchat
+    chown $(whoami) /opt/rocketchat
+    git clone -b=olin-master --depth=1 -- https://github.com/Bogidon/Rocket.Chat /opt/rocketchat
+
+    # Build
+    cd /opt/rocketchat
+    meteor npm install --production
+    meteor build --server-only --server "$HOST" --directory .
+
+    # Install some more deps
+    cd /opt/rocketchat/bundle/programs/server
+    npm install --production
+
+    # Load pm2
+    cd /opt/rocketchat/bundle
+    rm -f pm2-rocket-chat.json
+    cat > pm2-rocket-chat.json <<EOL
+{
+    "apps": [{
+        "name": "rocket.chat",
+        "script": "/opt/rocketchat/bundle/main.js",
+        "out_file": "/var/log/rocket.chat/app.log",
+        "error_file": "/var/log/rocket.chat/err.log",
+        "port": "$PORT",
+        "env": {
+            "NODE_ENV": "production",
+            "MONGO_URL": "$MONGO_URL",
+            "MONGO_OPLOG_URL": "$MONGO_OPLOG_URL",
+            "ROOT_URL": "$ROOT_URL",
+            "PORT": "$PORT"
+        }
+    }]
+}
+EOL
+
+    pm2 start pm2-rocket-chat.json
+    pm2 save
 fi
 
 
-
-
-# cd /vagrant
+# cd /opt/rocketchat
 # meteor build --server "$HOST" --directory .
 
-# cd /vagrant/bundle/programs/server
-# npm install
+cd /vagrant/bundle/programs/server
+npm install
 
-# cd /vagrant/bundle
-# rm -f pm2-rocket-chat.json
-# echo '{'                                                     > pm2-rocket-chat.json
-# echo '  "apps": [{'                                         >> pm2-rocket-chat.json
-# echo '    "name": "rocket.chat",'                           >> pm2-rocket-chat.json
-# echo '    "script": "/vagrant/bundle/main.js",' 			>> pm2-rocket-chat.json
-# echo '    "out_file": "/var/log/rocket.chat/app.log",'      >> pm2-rocket-chat.json
-# echo '    "error_file": "/var/log/rocket.chat/err.log",'    >> pm2-rocket-chat.json
-# echo "    \\"port\\": \\"$PORT\\","                         >> pm2-rocket-chat.json
-# echo '    "env": {'                                         >> pm2-rocket-chat.json
-# echo "      \\"MONGO_URL\\": \\"$MONGO_URL\\","             >> pm2-rocket-chat.json
-# echo "      \\"MONGO_OPLOG_URL\\": \\"$MONGO_OPLOG_URL\\"," >> pm2-rocket-chat.json
-# echo "      \\"ROOT_URL\\": \\"$ROOT_URL\\","               >> pm2-rocket-chat.json
-# echo "      \\"PORT\\": \\"$PORT\\""                        >> pm2-rocket-chat.json
-# echo '    }'                                                >> pm2-rocket-chat.json
-# echo '  }]'                                                 >> pm2-rocket-chat.json
-# echo '}'                                                    >> pm2-rocket-chat.json
-
-# pm2 start pm2-rocket-chat.json
-# pm2 save

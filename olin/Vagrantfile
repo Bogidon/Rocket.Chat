@@ -1,8 +1,12 @@
 config = YAML::load_file(File.join(__dir__, 'config.yml'))
-ESXI_HOST = ENV["ESXI_HOST"] || config["ESXI_HOST"]
-ESXI_USER = ENV["ESXI_USER"] || config["ESXI_USER"] || "root"
-OLINCHAT_ENV = ENV["OLINCHAT_ENV"] || config["OLINCHAT_ENV"] || "development"
-VM_NAME = ENV["VM_NAME"] || config["VM_NAME"] || "Olin-Rocket-Chat"
+get_var = Proc.new {  |name| ENV[name] || config[name]}
+
+ESXI_HOST = get_var("ESXI_HOST")
+ESXI_USER = get_var("ESXI_USER") || "root"
+OLINCHAT_ENV = get_var("OLINCHAT_ENV") || "development"
+VM_NAME = get_var("VM_NAME") || "Olin-Rocket-Chat"
+OVPN_FILE = get_var("OVPN_FILE")
+OVPN_FILE_PATH = OVPN_FILE ? File.join(__dir__, OVPN_FILE) : nil
 
 VAGRANTFILE_API_VERSION = "2"
 
@@ -29,8 +33,13 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 		path: "setup.sh", 
 		binary: true, 
 		env: {
-			"OLINCHAT_ENV" => development ? "DEVELOPMENT" : "PRODUCTION"
+			"OLINCHAT_ENV" => development ? "DEVELOPMENT" : "PRODUCTION",
+			"OVPN_FILE" => OVPN_FILE
 		}
+
+	if OVPN_FILE && File.exist?(OVPN_FILE_PATH)
+		config.vm.provision "file", source: OVPN_FILE_PATH, destination: "~/#{OVPN_FILE}"
+	end
 
 	# Virtual Box
 	config.vm.provider "virtualbox" do |vb, override|
@@ -52,6 +61,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 		    esxi.guest_name = VM_NAME
 	        esxi.guest_memsize = '4096'
 	        esxi.guest_numvcpus = '8'
+	        esxi.esxi_virtual_network = ['VM Network']
 		end
 	end
 end

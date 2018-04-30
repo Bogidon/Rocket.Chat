@@ -2,3 +2,4 @@ ESXI_HOST: <string>
 ESXI_USER: <string>
 OLINCHAT_ENV: <development|production>
 VM_NAME: <string>
+OVPN_FILE: <string>
