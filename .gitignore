@@ -1,3 +1,6 @@
+/olin/.vagrant
+/olin/config.yml
+
 **/bin/**
 **/build/*
 **/node_modules/*
