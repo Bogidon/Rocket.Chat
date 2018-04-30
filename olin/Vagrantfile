@@ -1,0 +1,57 @@
+ESXI_HOST = ENV["ESXI_HOST"]
+ESXI_USER = ENV["ESXI_USER"] || "root"
+OLINCHAT_ENV = ENV["OLINCHAT_ENV"] || "development"
+VM_NAME = ENV["VM_NAME"] || "Olin-Rocket-Chat"
+
+VAGRANTFILE_API_VERSION = "2"
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+
+	development = nil
+
+	# Based on a Ubuntu 16.04 box that has a bunch of providers
+	config.vm.box = "generic/ubuntu1604"
+	
+	case OLINCHAT_ENV
+	when "prod", "production"
+		development = false
+		config.vm.network "private_network", type: "dhcp"
+	when "dev", "development"
+		development = true
+		config.vm.network "forwarded_port", guest: 3000, host: 3000
+	else
+		raise "Unrecognized environment: #{OLINCHAT_ENV}. Valid values: 'production', 'development'"
+	end
+
+	# Provision the box
+	config.vm.provision "shell", 
+		path: "setup.sh", 
+		binary: true, 
+		env: {
+			"OLINCHAT_ENV" => development ? "DEVELOPMENT" : "PRODUCTION"
+		}
+
+	# Virtual Box
+	config.vm.provider "virtualbox" do |vb, override|
+		vb.name = "Rocket.Chat"
+		vb.memory = 4096
+		vb.cpus = 4
+
+		if development
+			override.vm.synced_folder "..", "/vagrant"
+		end
+	end
+
+	# VMWare ESXi
+	config.vm.provider :vmware_esxi do |esxi, override|
+		esxi.esxi_hostname = ESXI_HOST
+	    esxi.esxi_username = ESXI_USER
+	    esxi.esxi_password = 'prompt:'
+	    esxi.guest_name = VM_NAME
+        esxi.guest_memsize = '4096'
+        esxi.guest_numvcpus = '8'
+
+        # Using nfs because rsync doesn't work with rocket.chat's folder structure
+		override.vm.synced_folder('..', '/vagrant', type: 'nfs')
+	end
+end
