@@ -11,7 +11,32 @@ set -euvo pipefail
 curl -sL https://deb.nodesource.com/setup_8.x | sudo -E bash -
 sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv EA312927
 echo "deb http://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.2 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-3.2.list
-apt-get install -y build-essential nodejs mongodb-org unzip git
+sudo apt-get update
+sudo apt-get install -y build-essential nodejs mongodb-org unzip git
+
+# Configure mongo
+sudo chown $(whoami) /etc/mongod.conf
+sudo cat > /etc/mongod.conf <<EOL
+storage:
+  dbPath: /var/lib/mongodb
+  journal:
+    enabled: true
+
+systemLog:
+  destination: file
+  logAppend: true
+  path: /var/log/mongodb/mongod.log
+
+net:
+  port: 27017
+  bindIp: 127.0.0.1
+
+replication:
+      replSetName:  "001-rs"
+EOL
+sudo systemctl enable mongod
+sudo systemctl restart mongod
+mongo --eval "rs.initiate()" || true
 
 # Install Meteor
 curl https://install.meteor.com/ | sh
@@ -19,19 +44,12 @@ curl https://install.meteor.com/ | sh
 # PRODUCTION
 if [ "$OLINCHAT_ENV" == "PRODUCTION" ]
 then
-    # VPN
-    if [[ $OVPN_FILE ]]
-    then
-        apt-get install openvpn
-        openvpn --config "$OVPN_FILE"
-    fi
-
     # pm2 allows auto starting server
-    npm install pm2 -g
-    pm2 startup
+    sudo npm install pm2 -g
+    sudo pm2 startup
 
-    mkdir -p /var/log/rocket.chat
-    chmod 755 /var/log/rocket.chat
+    sudo mkdir -p /var/log/rocket.chat
+    sudo chmod 755 /var/log/rocket.chat
 
     # Deploy
     MONGO_URL=mongodb://localhost:27017/rocketchat
@@ -40,12 +58,14 @@ then
     PORT=3000
 
     # Download source
-    mkdir /opt/rocketchat
-    chown $(whoami) /opt/rocketchat
-    git clone -b=olin-master --depth=1 -- https://github.com/Bogidon/Rocket.Chat /opt/rocketchat
+    sudo rm -rf /opt/rocketchat
+    sudo mkdir /opt/rocketchat
+    sudo chown $(whoami) /opt/rocketchat
+    git clone -b olin-master --depth 1 -- https://github.com/Bogidon/Rocket.Chat /opt/rocketchat
 
     # Build
     cd /opt/rocketchat
+    export TOOL_NODE_FLAGS="--max-old-space-size=6000" # need more RAM for building
     meteor npm install --production
     meteor build --server-only --server "$HOST" --directory .
 
@@ -75,14 +95,13 @@ then
 }
 EOL
 
-    pm2 start pm2-rocket-chat.json
-    pm2 save
+    sudo pm2 start pm2-rocket-chat.json
+    sudo pm2 save
+
+    # VPN -- last because causes disconnect (for now)
+    if [[ $OVPN_FILE ]]
+    then
+        sudo apt-get install -y openvpn
+        sudo openvpn --config "/home/vagrant/$OVPN_FILE"
+    fi
 fi
-
-
-# cd /opt/rocketchat
-# meteor build --server "$HOST" --directory .
-
-cd /vagrant/bundle/programs/server
-npm install
-
