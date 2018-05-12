@@ -15,7 +15,7 @@ sudo apt-get update
 sudo apt-get install -y build-essential nodejs mongodb-org unzip git
 
 # Configure mongo
-sudo chown $(whoami) /etc/mongod.conf
+sudo chown -R $USER:$(id -gn $USER) /etc/mongod.conf
 sudo cat > /etc/mongod.conf <<EOL
 storage:
   dbPath: /var/lib/mongodb
@@ -46,41 +46,53 @@ if [ "$OLINCHAT_ENV" == "PRODUCTION" ]
 then
     # pm2 allows auto starting server
     sudo npm install pm2 -g
+    sudo chown -R $USER:$(id -gn $USER) /home/vagrant/.config
     sudo pm2 startup
 
     sudo mkdir -p /var/log/rocket.chat
-    sudo chmod 755 /var/log/rocket.chat
+    sudo chown -R $USER:$(id -gn $USER) /var/log/rocket.chat
 
-    # Deploy
+    export TOOL_NODE_FLAGS="--max-old-space-size=6000" # need more RAM for building
+    export NODE_ENV=production
+    SOURCE_DIR=/opt/rocketchat
+    DEPLOY_DIR=$HOME/rocket.chat
     MONGO_URL=mongodb://localhost:27017/rocketchat
     MONGO_OPLOG_URL=mongodb://localhost:27017/local?replicaSet=001-rs
     ROOT_URL=http://localhost:3000
     PORT=3000
 
     # Download source
-    sudo rm -rf /opt/rocketchat
-    sudo mkdir /opt/rocketchat
-    sudo chown $(whoami) /opt/rocketchat
-    git clone -b olin-master --depth 1 -- https://github.com/Bogidon/Rocket.Chat /opt/rocketchat
+    sudo chown -R $USER:$(id -gn $USER) /opt
+    sudo rm -rf $SOURCE_DIR
+    sudo rm -rf $DEPLOY_DIR
+    sudo mkdir $SOURCE_DIR
+    sudo mkdir -p $DEPLOY_DIR
+    sudo chown -R $USER:$(id -gn $USER) $SOURCE_DIR
+    sudo chown -R $USER:$(id -gn $USER) $DEPLOY_DIR
+    git clone -b olin-master --depth 1 -- https://github.com/Bogidon/Rocket.Chat $SOURCE_DIR
 
     # Build
-    cd /opt/rocketchat
-    export TOOL_NODE_FLAGS="--max-old-space-size=6000" # need more RAM for building
-    meteor npm install --production
-    meteor build --server-only --server "$HOST" --directory .
+    cd $SOURCE_DIR
+    meteor npm install
+    
+    set +e
+    meteor add rocketchat:lib
+    set -euvo pipefail
+
+    meteor build --server-only --directory $DEPLOY_DIR
 
     # Install some more deps
-    cd /opt/rocketchat/bundle/programs/server
-    npm install --production
+    cd $DEPLOY_DIR/bundle/programs/server
+    npm install
 
     # Load pm2
-    cd /opt/rocketchat/bundle
+    cd $DEPLOY_DIR/bundle
     rm -f pm2-rocket-chat.json
     cat > pm2-rocket-chat.json <<EOL
 {
     "apps": [{
         "name": "rocket.chat",
-        "script": "/opt/rocketchat/bundle/main.js",
+        "script": "$DEPLOY_DIR/bundle/main.js",
         "out_file": "/var/log/rocket.chat/app.log",
         "error_file": "/var/log/rocket.chat/err.log",
         "port": "$PORT",
