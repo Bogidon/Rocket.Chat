@@ -1,0 +1,90 @@
+$config = YAML::load_file(File.join(__dir__, 'config.yml'))
+
+def get_var(name)
+	ENV[name] || $config[name]
+end
+
+ESXI_HOST = get_var("ESXI_HOST")
+ESXI_SSH_KEY_PATH = get_var("ESXI_SSH_KEY_PATH")
+ESXI_USER = get_var("ESXI_USER") || "root"
+HOST = get_var("HOST") || "localhost"
+OLINCHAT_ENV = get_var("OLINCHAT_ENV") || "development"
+OVPN_FILE = get_var("OVPN_FILE")
+OVPN_FILE_PATH = OVPN_FILE ? File.join(__dir__, OVPN_FILE) : nil
+VM_NAME = get_var("VM_NAME") || "Olin-Rocket-Chat"
+
+VAGRANTFILE_API_VERSION = "2"
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+
+	development = nil
+	case OLINCHAT_ENV
+	when "prod", "production"
+		development = false
+		config.vm.network "private_network", type: "dhcp"
+	when "dev", "development"
+		development = true
+	else
+		raise "Unrecognized environment: #{OLINCHAT_ENV}. Valid values: 'production', 'development'"
+	end
+	production = !development
+
+	# Based on a Ubuntu 16.04 box that has a bunch of providers
+	config.vm.box = "generic/ubuntu1604"
+	config.vm.network "forwarded_port", guest: 3000, host: 3000
+
+	# Transfer VPN client file
+	if production && OVPN_FILE && 
+		if File.exist?(OVPN_FILE_PATH)
+			config.vm.provision("file", 
+				source: OVPN_FILE_PATH,
+				destination: "/home/vagrant/#{OVPN_FILE}"
+			)
+		else
+			raise "File not found: #{OVPN_FILE_PATH}"
+		end		
+	end
+
+	# Provision the box
+	config.vm.provision "shell", 
+		path: "setup.sh", 
+		binary: true, 
+		privileged: false,
+		env: {
+			"OLINCHAT_ENV" => development ? "DEVELOPMENT" : "PRODUCTION",
+			"OVPN_FILE" => OVPN_FILE,
+			"HOST" => HOST
+		}
+
+	# Have to define separate machine per provider because Vagrant does not allow same machine to be
+	# run on multiple providers: 
+	# https://web.archive.org/web/20180501021542/https://www.vagrantup.com/docs/providers/basic_usage.html
+
+	# Virtual Box
+	config.vm.define "vb", autostart: false do |web|
+		config.vm.provider "virtualbox" do |vb, override|
+			vb.name = "Rocket.Chat"
+			vb.memory = 4096
+			vb.cpus = 4
+
+			if development
+				override.vm.synced_folder "..", "/vagrant"
+			end
+		end	
+	end
+
+	# VMWare ESXi - production only
+	unless development
+		config.vm.define "esxi", autostart: false do |web|
+			config.vm.provider :vmware_esxi do |esxi, override|
+				esxi.esxi_hostname = ESXI_HOST
+			    esxi.esxi_username = ESXI_USER
+			    esxi.esxi_password = ESXI_SSH_KEY_PATH ? "key:#{ESXI_SSH_KEY_PATH}" : 'prompt:'
+			    esxi.guest_name = VM_NAME
+		        esxi.guest_memsize = '23552'
+		        esxi.guest_numvcpus = '16'
+		        esxi.esxi_virtual_network = ['VM Network']
+			end
+		end
+	end
+end

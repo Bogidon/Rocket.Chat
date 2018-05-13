@@ -1,3 +1,7 @@
+/olin/.vagrant
+/olin/config.yml
+/olin/*.ovpn
+
 **/bin/**
 **/build/*
 **/node_modules/*

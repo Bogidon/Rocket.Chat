@@ -1,0 +1,7 @@
+ESXI_HOST: <string>
+ESXI_SSH_KEY_PATH: <string> (optional)
+ESXI_USER: <string>
+HOST: <string>
+OLINCHAT_ENV: <development|production>
+OVPN_FILE: <string>
+VM_NAME: <string>
