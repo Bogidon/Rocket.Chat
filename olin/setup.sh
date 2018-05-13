@@ -2,6 +2,7 @@
 ## Inspired by
 ## - https://rocket.chat/docs/installation/automation-tools/vagrant/
 ## - https://github.com/Bogidon/Rocket.Chat/blob/develop/.sandstorm/setup.sh
+## - and more...
 
 # Make script safer (https://coderwall.com/p/fkfaqq/safer-bash-scripts-with-set-euxo-pipefail)
 set -x
@@ -12,7 +13,7 @@ curl -sL https://deb.nodesource.com/setup_8.x | sudo -E bash -
 sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv EA312927
 echo "deb http://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.2 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-3.2.list
 sudo apt-get update
-sudo apt-get install -y build-essential nodejs mongodb-org unzip git
+sudo apt-get install -y build-essential nodejs mongodb-org-shell unzip git
 
 # Configure mongo
 sudo chown -R $USER:$(id -gn $USER) /etc/mongod.conf
@@ -73,11 +74,11 @@ then
 
     # Build
     cd $SOURCE_DIR
-    meteor npm install
+    NODE_ENV=development meteor npm install # Dev is necessary for some reason...
     
     set +e
     meteor add rocketchat:lib
-    set -euvo pipefail
+    set -e
 
     meteor build --server-only --directory $DEPLOY_DIR
 

@@ -81,8 +81,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 			    esxi.esxi_username = ESXI_USER
 			    esxi.esxi_password = ESXI_SSH_KEY_PATH ? "key:#{ESXI_SSH_KEY_PATH}" : 'prompt:'
 			    esxi.guest_name = VM_NAME
-		        esxi.guest_memsize = '8192'
-		        esxi.guest_numvcpus = '8'
+		        esxi.guest_memsize = '23552'
+		        esxi.guest_numvcpus = '16'
 		        esxi.esxi_virtual_network = ['VM Network']
 			end
 		end
